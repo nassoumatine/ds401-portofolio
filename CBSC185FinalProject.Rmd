@@ -1,0 +1,325 @@
+---
+title: "CBSC185FinalProject"
+author: "Naka Assoumatine"
+date: "2024-12-12"
+output: pdf_document
+---
+
+```{r Importing libraries, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(naniar)
+library(lme4)
+library(jtools)
+```
+
+# Import the class data 
+
+```{r Import Data, include=FALSE}
+class_data <- read.csv("Daily Survery Dec 3.csv")
+
+```
+
+```{r Create subset of the data,  include=FALSE}
+class_data_subset <- subset(class_data, select = 
+                          c(StartDate, ID, Q33, Q9_1))
+
+# Delete the first and second rows; they are not data points
+class_data_subset <- class_data_subset[-c(1,2), ]
+```
+
+```{r Initial summary of the data}
+summary(class_data_subset)
+
+glimpse(class_data_subset)
+```
+
+# Create a subset of the subdata with Id, Survey date mood, and hors of sleep
+
+```{r Removing and renaming variables, include=FALSE}
+# Remove all 100 becasue they were just placeholders
+class_data_subset <- class_data_subset %>%
+  filter(ID != "100")
+class_data_subset <- rename(class_data_subset, 
+                        survey_date = StartDate,
+                        mood = Q33,
+                        hours_of_sleep = Q9_1)
+View(class_data_subset)
+```
+
+```{r Changing date format, include=FALSE}
+class_data_subset$survey_date <- as.Date(sub(" \\d{2}:\\d{2}$", "", class_data_subset$survey_date), format = "%m/%d/%Y")
+
+```
+
+```{r Summary of the data after cleaning}
+glimpse(class_data_subset)
+```
+
+
+
+```{r Change the values of hours_of_sleep to nummeric, include=FALSE}
+
+# Initialize an empty vector for cleaned values
+cleaned_sleep <- c()
+
+# Loop directly over the values of hours_of_sleep
+for (value in class_data_subset$hours_of_sleep) {
+  
+  # Case 1: Check if the value is numeric
+  if (!is.na(as.numeric(value))) {
+    cleaned_sleep <- c(cleaned_sleep, as.numeric(value))
+  }
+  
+  # Case 2: Check if the value contains "hours" or "hour"
+  else if ("hours" %in% unlist(strsplit(as.character(value), " ")) || 
+           "hour" %in% unlist(strsplit(as.character(value), " "))) {
+    numeric_part <- as.numeric(strsplit(as.character(value), " ")[[1]][1])
+    cleaned_sleep <- c(cleaned_sleep, numeric_part)
+  }
+  
+  # Case 3: Check if the value contains ":"
+  else if (":" %in% unlist(strsplit(as.character(value), ""))) {
+    parts <- unlist(strsplit(as.character(value), ":"))
+    hours <- as.numeric(parts[1])
+    minutes <- as.numeric(parts[2])
+    cleaned_sleep <- c(cleaned_sleep, hours + minutes / 60)
+  }
+  
+  # Default: Assign NA for invalid entries
+  else {
+    cleaned_sleep <- c(cleaned_sleep, NA)
+  }
+}
+
+# Update the data frame with cleaned values
+class_data_subset$hours_of_sleep <- cleaned_sleep
+```
+
+# Vizualize missing data
+```{r Check missing data, echo=FALSE}
+vis_miss(class_data_subset)
+```
+
+# Vizualize missing data after removing missing data
+```{r Remove missing data and check again, echo=FALSE}
+class_data_subset %>%
+na.omit() %>%
+  vis_miss()
+```
+
+#  Boxplot hours of sleep  
+```{r Boxplot of Hours of sleep, echo=FALSE, warning=FALSE}
+ggplot(class_data_subset, aes(x = "", y = hours_of_sleep)) +
+  geom_boxplot(fill = "orange", color = "black", width = 0.2) +
+  labs(title = "Boxplot of Hours of Sleep", 
+       y = "Hours of Sleep", 
+       x = "") +
+  theme_minimal()
+```
+
+
+```{r Harcoding outlier, include=FALSE}
+# Hardcoding for the case of 530
+# I think the person probably meant 5:30 instead of 530
+cleaned_sleep <- c()
+
+for (value in class_data_subset$hours_of_sleep) {
+  if (!is.na(value) && value == 530.0) {
+    cleaned_sleep <- c(cleaned_sleep, 5.5)
+  }
+  else{
+    cleaned_sleep <- c(cleaned_sleep, value)
+  }
+}
+class_data_subset$hours_of_sleep <- cleaned_sleep
+```
+
+
+# Boxplot hours of sleep after harcoding the oulier 530
+```{r Boxplot of Hours of sleep again, echo=FALSE, warning=FALSE}
+# Boxplot of Hours of sleep again to check that there is no unrealistic hours of sleep
+ggplot(class_data_subset, aes(x = "", y = hours_of_sleep)) +
+  geom_boxplot(fill = "orange", color = "black", width = 0.2) +
+  labs(title = "Boxplot of Hours of Sleep", 
+       y = "Hours of Sleep", 
+       x = "") +
+  theme_minimal()
+```
+```{r change mood values 13, and 14, include=FALSE}
+# Map the mood values to new values
+class_data_subset$mood <- as.numeric(factor(class_data_subset$mood, 
+                                            levels = c(1, 2, 3, 4, 5, 6, 7, 13, 14),
+                                            labels = c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
+```
+
+
+
+```{r Check missing data again, include=FALSE}
+vis_miss(class_data_subset)
+```
+
+```{r Remove missing data and check again2, include=FALSE}
+class_data_subset %>%
+na.omit() %>%
+  vis_miss()
+```
+
+
+# Histogram of mood
+```{r Histogram of mood, echo=FALSE, warning=FALSE}
+# Plot a histogram for mood
+ggplot(class_data_subset, aes(x = mood)) +
+  geom_histogram(binwidth = 1, fill = "orange", color = "black") +
+  labs(title = "Histogram of Mood Responses", 
+       x = "Mood Levels", 
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Bar plot of mood
+To allow the reader to understand what the mood values are, I will create a bar plot with the values of the mood levels o the x-axis. This can be seen on the graph below:
+
+```{r Creating a bar plot of mood, echo=FALSE, warning=FALSE}
+#Factoring the values of the variable mood
+class_data_subset$mood <- factor(class_data_subset$mood, 
+                              levels = c(1:9), 
+                              labels = c("extremely negative", 
+                                         "mostly negative",
+                                         "negative",
+                                         "somewhat negative",
+                                         "neither negative nor positive",
+                                         "somewhat positive",
+                                         "positive",
+                                         "mostly positive",
+                                         "extremely positive"))
+ggplot(class_data_subset, aes(x = mood)) +
+  geom_bar(binwidth = 1, fill = "orange", color = "black") +
+  labs(title = "Bar plot of Mood Responses", 
+       x = "Mood Levels", 
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+
+```{r mood survey date for each individual over time, include=FALSE}
+#Average sleep hours by ID
+average_sleep <- class_data_subset %>%
+  group_by(ID) %>%
+  summarize(avg_sleep_hours = mean(hours_of_sleep))
+
+
+# Ensure IDs are ordered correctly
+class_data_subset$ID <- factor(class_data_subset$ID, levels = sort(as.numeric(unique(class_data_subset$ID))))
+
+levels(class_data_subset$ID)
+```
+
+
+# Mood by Survey Date for Each Student
+This will give an insight of the trend of the mood for all students
+
+```{r plot each student, echo=FALSE, warning=FALSE}
+# Compute average mood by survey_date
+average_mood_over_time <- class_data_subset %>%
+  group_by(survey_date) %>%
+  summarize(avg_mood = mean(mood, na.rm = TRUE))  # Exclude missing values
+
+ggplot(class_data_subset, aes(x = survey_date, y = mood, group = ID, color = ID)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Mood by Survey Date for Each Student",
+       x = "Survey Date",
+       y = "Mood Level",
+       color = "Student ID") +
+  scale_x_date(breaks = average_mood_over_time$survey_date, 
+               date_labels = "%b %d") +  # Format as "Month Day"
+  theme_minimal() +
+  theme(legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for readability
+
+
+```
+
+```{r revert mood back to numeric, include=FALSE}
+
+# Create a mapping from labels back to numeric values
+mood_mapping <- c("extremely negative" = 1, 
+                  "mostly negative" = 2, 
+                  "negative" = 3,
+                  "somewhat negative" = 4,
+                  "neither negative nor positive" = 5,
+                  "somewhat positive" = 6,
+                  "positive" = 7,
+                  "mostly positive" = 8,
+                  "extremely positive" = 9)
+
+# Apply the mapping
+class_data_subset$mood <- as.numeric(mood_mapping[class_data_subset$mood])
+
+
+```
+
+
+# Overall average mood overtime
+```{r Plotting the average mood over time, echo=FALSE, warning=FALSE}
+average_mood_over_time <- class_data_subset %>%
+  group_by(survey_date) %>%
+  summarize(avg_mood = mean(mood, na.rm = TRUE))  # Exclude missing values
+
+
+ggplot(average_mood_over_time, aes(x = survey_date, y = avg_mood)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 2) +
+  labs(title = "Average Mood Over Time", 
+       x = "Survey Date", 
+       y = "Average Mood") +
+  scale_x_date(breaks = average_mood_over_time$survey_date, 
+               date_labels = "%b %d") +  # Format as "Month Day" 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+# Regression model
+```{r Run an LMER regression, echo=FALSE, warning=FALSE}
+# Run the LMER model
+lmer_model <- lmer(mood ~ hours_of_sleep + survey_date + (1 | ID), 
+                   data = class_data_subset, 
+                   REML = FALSE)
+
+# Summary of the model
+summary(lmer_model)
+summ(lmer_model)
+```
+
+# Regression line of mood vs hours of sleep 
+
+```{r Plot of predicted mood values, echo=FALSE, warning=FALSE}
+complete_data <- na.omit(class_data_subset[, c("mood", "hours_of_sleep", "survey_date", "ID")])
+complete_data$predicted_mood <- predict(lmer_model, re.form = NA)
+
+class_data_subset <- merge(class_data_subset, 
+                           complete_data[, c("ID", "survey_date", "predicted_mood")], 
+                           by = c("ID", "survey_date"), 
+                           all.x = TRUE)
+ggplot(class_data_subset, aes(x = hours_of_sleep, y = mood)) +
+  geom_point(alpha = 0.6, color = "blue") +  # Actual data points
+  geom_line(aes(y = predicted_mood), color = "red", size = 1) +  # Regression line
+  labs(title = "Regression Line of Mood vs Hours of Sleep",
+       x = "Hours of Sleep",
+       y = "Mood") +
+  theme_minimal()
+
+
+```
+
+
+
+
