@@ -12,7 +12,10 @@
 🔭 **Current Focus**:  
 - Developing AI/ML applications for education  
 - Building data pipelines for social impact projects  
-- Teaching programming to young learners  
+- Teaching programming to young learners
+
+✨ ### Why Data Science?
+My journey into data science began with a curiosity about how numbers could reveal patterns in human behavior. Growing up multilingual and passionate about learning, I became fascinated by the potential of data to improve education, especially for underrepresented communities. Whether it’s analyzing mood trends, building language tools, or teaching kids how to code, I see data science as a way to bridge knowledge gaps and empower others through technology.
 
 ---
 
